@@ -80,7 +80,12 @@ final class Thicken_Feed
     {
         $cached = get_transient(Thicken::TRANSIENT_KEY);
         if ($cached !== false) {
-            return (int) $cached;
+            $cached_id = (int) $cached;
+            if ($this->is_valid_cached_post($cached_id, $post_types)) {
+                return $cached_id;
+            }
+
+            delete_transient(Thicken::TRANSIENT_KEY);
         }
 
         $post_id = $this->get_random_post_id($post_types);
@@ -89,6 +94,33 @@ final class Thicken_Feed
         }
 
         return $post_id;
+    }
+
+    private function is_valid_cached_post($post_id, $post_types)
+    {
+        if (!$post_id) {
+            return false;
+        }
+
+        $post_types = array_values(array_filter($post_types, 'post_type_exists'));
+        if (empty($post_types)) {
+            return false;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            return false;
+        }
+
+        if ($post->post_status !== 'publish') {
+            return false;
+        }
+
+        if (!in_array($post->post_type, $post_types, true)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function get_random_post_id($post_types)
