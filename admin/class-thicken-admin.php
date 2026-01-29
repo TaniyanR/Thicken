@@ -118,6 +118,10 @@ final class Thicken_Admin
 
     public function sanitize_settings($input)
     {
+        if (!current_user_can('manage_options')) {
+            return $this->plugin->get_settings();
+        }
+
         $defaults = Thicken::get_default_settings();
         $output = $defaults;
 
