@@ -93,40 +93,33 @@ final class Thicken_Feed
 
     private function get_random_post_id($post_types)
     {
+        global $wpdb;
+
         $post_types = array_values(array_filter($post_types, 'post_type_exists'));
         if (empty($post_types)) {
             return 0;
         }
 
-        $count_query = new WP_Query(array(
-            'post_type' => $post_types,
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-        ));
+        $placeholders = implode(',', array_fill(0, count($post_types), '%s'));
+        $min_max_sql = "SELECT MIN(ID) as min_id, MAX(ID) as max_id FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders)";
+        $min_max = $wpdb->get_row($wpdb->prepare($min_max_sql, $post_types));
 
-        $total = (int) $count_query->found_posts;
-        if ($total < 1) {
+        if (empty($min_max) || !$min_max->min_id || !$min_max->max_id) {
             return 0;
         }
 
-        $offset = $total > 1 ? wp_rand(0, $total - 1) : 0;
+        $rand_id = wp_rand((int) $min_max->min_id, (int) $min_max->max_id);
+        $select_sql = "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders) AND ID >= %d ORDER BY ID ASC LIMIT 1";
+        $post_id = (int) $wpdb->get_var($wpdb->prepare($select_sql, array_merge($post_types, array($rand_id))));
 
-        $random_query = new WP_Query(array(
-            'post_type' => $post_types,
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-            'orderby' => 'date',
-            'order' => 'DESC',
-            'offset' => $offset,
-        ));
-
-        if (empty($random_query->posts)) {
-            return 0;
+        if ($post_id > 0) {
+            return $post_id;
         }
 
-        return (int) $random_query->posts[0];
+        $fallback_sql = "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders) AND ID <= %d ORDER BY ID DESC LIMIT 1";
+        $post_id = (int) $wpdb->get_var($wpdb->prepare($fallback_sql, array_merge($post_types, array($rand_id))));
+
+        return $post_id > 0 ? $post_id : 0;
     }
 
     private function get_post_description($post)
