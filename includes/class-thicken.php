@@ -7,7 +7,8 @@ if (!defined('ABSPATH')) {
 final class Thicken
 {
     const OPTION_NAME = 'thicken_settings';
-    const TRANSIENT_PREFIX = 'thicken_random_post';
+    const TRANSIENT_KEY_GLOBAL = 'thicken_random_post_id_global';
+    const TRANSIENT_KEY_CAT_PREFIX = 'thicken_random_post_id_cat_';
 
     private static $instance = null;
 
@@ -93,27 +94,11 @@ final class Thicken
 
     public function build_transient_key($settings, $term_id = 0)
     {
-        $settings = is_array($settings) ? $settings : array();
-        $settings = wp_parse_args($settings, self::get_default_settings());
-
-        $post_types = isset($settings['post_types']) ? (array) $settings['post_types'] : array('post');
-        $interval = isset($settings['interval']) ? (int) $settings['interval'] : 600;
-        if ($interval <= 0) {
-            $interval = 600;
+        $term_id = (int) $term_id;
+        if ($term_id > 0) {
+            return self::TRANSIENT_KEY_CAT_PREFIX . $term_id;
         }
 
-        $slug = isset($settings['feed_slug']) ? sanitize_title($settings['feed_slug']) : 'random-post';
-        if ($slug === '') {
-            $slug = 'random-post';
-        }
-
-        $context = $term_id ? 'cat_' . (int) $term_id : 'global';
-        $hash = md5(wp_json_encode(array(
-            'post_types' => $post_types,
-            'interval' => $interval,
-            'slug' => $slug,
-        )));
-
-        return self::TRANSIENT_PREFIX . '_' . $context . '_' . substr($hash, 0, 10);
+        return self::TRANSIENT_KEY_GLOBAL;
     }
 }

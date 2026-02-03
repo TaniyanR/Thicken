@@ -33,6 +33,7 @@ https://example.com/feed/random-post
 https://example.com/category/{category-slug}/feed/random-post
 
 ※ スラッグ変更時は `/feed/{設定したスラッグ}` に置き換えてください。
+※ カテゴリ別フィードはカテゴリ内の公開済み投稿から抽選し、カテゴリごとにキャッシュを分離します。
 
 ---
 
