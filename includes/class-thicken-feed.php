@@ -23,10 +23,14 @@ final class Thicken_Feed
             $interval = 600;
         }
 
-        $post_id = $this->get_cached_post_id($post_types, $interval);
+        $category = $this->get_category_context();
+        $term_id = $category ? (int) $category->term_id : 0;
+        $transient_key = $this->plugin->get_transient_key($term_id);
+
+        $post_id = $this->get_cached_post_id($transient_key, $post_types, $interval, $term_id);
         $post = $post_id ? get_post($post_id) : null;
         if ($post && $post->post_status !== 'publish') {
-            delete_transient(Thicken::TRANSIENT_KEY);
+            delete_transient($transient_key);
             $post = null;
         }
 
@@ -76,27 +80,27 @@ final class Thicken_Feed
         exit;
     }
 
-    private function get_cached_post_id($post_types, $interval)
+    private function get_cached_post_id($transient_key, $post_types, $interval, $term_id = 0)
     {
-        $cached = get_transient(Thicken::TRANSIENT_KEY);
+        $cached = get_transient($transient_key);
         if ($cached !== false) {
             $cached_id = (int) $cached;
-            if ($this->is_valid_cached_post($cached_id, $post_types)) {
+            if ($this->is_valid_cached_post($cached_id, $post_types, $term_id)) {
                 return $cached_id;
             }
 
-            delete_transient(Thicken::TRANSIENT_KEY);
+            delete_transient($transient_key);
         }
 
-        $post_id = $this->get_random_post_id($post_types);
+        $post_id = $this->get_random_post_id($post_types, $term_id);
         if ($post_id) {
-            set_transient(Thicken::TRANSIENT_KEY, $post_id, $interval);
+            set_transient($transient_key, $post_id, $interval);
         }
 
         return $post_id;
     }
 
-    private function is_valid_cached_post($post_id, $post_types)
+    private function is_valid_cached_post($post_id, $post_types, $term_id = 0)
     {
         if (!$post_id) {
             return false;
@@ -120,10 +124,14 @@ final class Thicken_Feed
             return false;
         }
 
+        if ($term_id && !has_term($term_id, 'category', $post)) {
+            return false;
+        }
+
         return true;
     }
 
-    private function get_random_post_id($post_types)
+    private function get_random_post_id($post_types, $term_id = 0)
     {
         global $wpdb;
 
@@ -133,23 +141,34 @@ final class Thicken_Feed
         }
 
         $placeholders = implode(',', array_fill(0, count($post_types), '%s'));
-        $min_max_sql = "SELECT MIN(ID) as min_id, MAX(ID) as max_id FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders)";
-        $min_max = $wpdb->get_row($wpdb->prepare($min_max_sql, $post_types));
+        $join = '';
+        $where = '';
+        $params = $post_types;
+
+        if ($term_id) {
+            $join = " INNER JOIN {$wpdb->term_relationships} tr ON {$wpdb->posts}.ID = tr.object_id INNER JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id";
+            $where = " AND tt.taxonomy = %s AND tt.term_id = %d";
+            $params[] = 'category';
+            $params[] = (int) $term_id;
+        }
+
+        $min_max_sql = "SELECT MIN({$wpdb->posts}.ID) as min_id, MAX({$wpdb->posts}.ID) as max_id FROM {$wpdb->posts}{$join} WHERE {$wpdb->posts}.post_status = 'publish' AND {$wpdb->posts}.post_type IN ($placeholders)$where";
+        $min_max = $wpdb->get_row($wpdb->prepare($min_max_sql, $params));
 
         if (empty($min_max) || !$min_max->min_id || !$min_max->max_id) {
             return 0;
         }
 
         $rand_id = wp_rand((int) $min_max->min_id, (int) $min_max->max_id);
-        $select_sql = "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders) AND ID >= %d ORDER BY ID ASC LIMIT 1";
-        $post_id = (int) $wpdb->get_var($wpdb->prepare($select_sql, array_merge($post_types, array($rand_id))));
+        $select_sql = "SELECT {$wpdb->posts}.ID FROM {$wpdb->posts}{$join} WHERE {$wpdb->posts}.post_status = 'publish' AND {$wpdb->posts}.post_type IN ($placeholders)$where AND {$wpdb->posts}.ID >= %d ORDER BY {$wpdb->posts}.ID ASC LIMIT 1";
+        $post_id = (int) $wpdb->get_var($wpdb->prepare($select_sql, array_merge($params, array($rand_id))));
 
         if ($post_id > 0) {
             return $post_id;
         }
 
-        $fallback_sql = "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_type IN ($placeholders) AND ID <= %d ORDER BY ID DESC LIMIT 1";
-        $post_id = (int) $wpdb->get_var($wpdb->prepare($fallback_sql, array_merge($post_types, array($rand_id))));
+        $fallback_sql = "SELECT {$wpdb->posts}.ID FROM {$wpdb->posts}{$join} WHERE {$wpdb->posts}.post_status = 'publish' AND {$wpdb->posts}.post_type IN ($placeholders)$where AND {$wpdb->posts}.ID <= %d ORDER BY {$wpdb->posts}.ID DESC LIMIT 1";
+        $post_id = (int) $wpdb->get_var($wpdb->prepare($fallback_sql, array_merge($params, array($rand_id))));
 
         return $post_id > 0 ? $post_id : 0;
     }
@@ -165,5 +184,30 @@ final class Thicken_Feed
         $content = wp_strip_all_tags($content);
 
         return wp_trim_words($content, 55);
+    }
+
+    private function get_category_context()
+    {
+        $term_id = (int) get_query_var('cat');
+        if ($term_id) {
+            $term = get_term($term_id, 'category');
+            if ($term && !is_wp_error($term)) {
+                return $term;
+            }
+        }
+
+        $queried_object = get_queried_object();
+        if ($queried_object instanceof WP_Term && $queried_object->taxonomy === 'category') {
+            return $queried_object;
+        }
+
+        if (function_exists('is_category') && is_category()) {
+            $term = get_queried_object();
+            if ($term instanceof WP_Term && $term->taxonomy === 'category') {
+                return $term;
+            }
+        }
+
+        return null;
     }
 }

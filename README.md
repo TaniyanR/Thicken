@@ -28,6 +28,12 @@ https://example.com/feed/random-post
 
 ※ フィードスラッグは管理画面から変更可能です。
 
+カテゴリ別フィードURL（カテゴリースラッグを使用）：
+
+https://example.com/category/{category-slug}/feed/random-post
+
+※ スラッグ変更時は `/feed/{設定したスラッグ}` に置き換えてください。
+
 ---
 
 ## 動作の仕組み
