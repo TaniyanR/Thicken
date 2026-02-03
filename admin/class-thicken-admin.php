@@ -167,8 +167,11 @@ final class Thicken_Admin
             flush_rewrite_rules();
         }
 
-        if ($old_value['interval'] !== $new_value['interval'] || $old_value['post_types'] !== $new_value['post_types']) {
-            delete_transient(Thicken::TRANSIENT_KEY);
+        if ($old_value['interval'] !== $new_value['interval'] || $old_value['post_types'] !== $new_value['post_types'] || $old_value['feed_slug'] !== $new_value['feed_slug']) {
+            $old_key = $this->plugin->build_transient_key($old_value, 0);
+            $new_key = $this->plugin->build_transient_key($new_value, 0);
+            delete_transient($old_key);
+            delete_transient($new_key);
         }
     }
 
