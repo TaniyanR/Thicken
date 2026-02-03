@@ -20,12 +20,14 @@ final class Thicken_Admin
 
     public function register_menu()
     {
-        add_options_page(
+        add_menu_page(
             __('Thicken', 'thicken'),
             __('Thicken', 'thicken'),
             'manage_options',
             'thicken-settings',
-            array($this, 'render_settings_page')
+            array($this, 'render_settings_page'),
+            'dashicons-rss',
+            70
         );
     }
 
