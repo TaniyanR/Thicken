@@ -64,6 +64,7 @@ final class Thicken_Feed
             $link = get_permalink($post);
             $description = $this->get_post_description($post);
             $pub_date = get_post_time(DATE_RSS, true, $post);
+            $permalink = get_permalink($post);
 
             echo '<item>';
             echo "\n";
@@ -74,6 +75,8 @@ final class Thicken_Feed
             echo '<pubDate>' . esc_html($pub_date) . '</pubDate>';
             echo "\n";
             echo '<guid isPermaLink="true">' . esc_url($link) . '</guid>';
+            echo "\n";
+            echo '<permalink>' . esc_url($permalink) . '</permalink>';
             echo "\n";
             echo '<description>' . esc_html($description) . '</description>';
             echo "\n";
