@@ -28,10 +28,17 @@ final class Thicken_Feed
         $transient_key = $this->plugin->get_transient_key($term_id);
 
         $post_id = $this->get_cached_post_id($transient_key, $post_types, $interval, $term_id);
-        $post = $post_id ? get_post($post_id) : null;
-        if ($post && $post->post_status !== 'publish') {
+        $post = $this->get_valid_post($post_id, $post_types, $term_id);
+        if (!$post && $post_id) {
             delete_transient($transient_key);
-            $post = null;
+            $post_id = $this->get_random_post_id($post_types, $term_id);
+            if ($post_id) {
+                set_transient($transient_key, $post_id, $interval);
+                $post = $this->get_valid_post($post_id, $post_types, $term_id);
+                if (!$post) {
+                    delete_transient($transient_key);
+                }
+            }
         }
 
         $charset = get_option('blog_charset');
@@ -102,33 +109,7 @@ final class Thicken_Feed
 
     private function is_valid_cached_post($post_id, $post_types, $term_id = 0)
     {
-        if (!$post_id) {
-            return false;
-        }
-
-        $post_types = array_values(array_filter($post_types, 'post_type_exists'));
-        if (empty($post_types)) {
-            return false;
-        }
-
-        $post = get_post($post_id);
-        if (!$post) {
-            return false;
-        }
-
-        if ($post->post_status !== 'publish') {
-            return false;
-        }
-
-        if (!in_array($post->post_type, $post_types, true)) {
-            return false;
-        }
-
-        if ($term_id && !has_term($term_id, 'category', $post)) {
-            return false;
-        }
-
-        return true;
+        return (bool) $this->get_valid_post($post_id, $post_types, $term_id);
     }
 
     private function get_random_post_id($post_types, $term_id = 0)
@@ -184,6 +165,37 @@ final class Thicken_Feed
         $content = wp_strip_all_tags($content);
 
         return wp_trim_words($content, 55);
+    }
+
+    private function get_valid_post($post_id, $post_types, $term_id = 0)
+    {
+        if (!$post_id) {
+            return null;
+        }
+
+        $post_types = array_values(array_filter($post_types, 'post_type_exists'));
+        if (empty($post_types)) {
+            return null;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            return null;
+        }
+
+        if ($post->post_status !== 'publish') {
+            return null;
+        }
+
+        if (!in_array($post->post_type, $post_types, true)) {
+            return null;
+        }
+
+        if ($term_id && !has_term($term_id, 'category', $post)) {
+            return null;
+        }
+
+        return $post;
     }
 
     private function get_category_context()
